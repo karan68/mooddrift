@@ -7,80 +7,78 @@ Implements all 5 features from FEATURES.md:
 3. Receive text → embed → store → drift check → reply
 4. Send voice summary (TTS) when drift is detected
 5. Weekly voice recap (via /telegram/weekly-recap cron endpoint)
+
+Key design: Returns 200 OK to Telegram INSTANTLY, processes in background thread.
+This prevents Telegram from retrying and makes the bot feel responsive.
 """
 
-import json
+import asyncio
+import threading
 from datetime import datetime, timezone, timedelta
 from collections import Counter
 
 import httpx
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, BackgroundTasks
 
 from config import settings
-from services.embedding import generate_embedding
-from services.sentiment import analyze_sentiment
-from services.keywords import extract_keywords
-from services.qdrant_service import upsert_entry, scroll_entries
+from services.qdrant_service import scroll_entries
 from services.drift_engine import detect_drift
-from services.transcription import transcribe_audio
 
 router = APIRouter()
 
 TELEGRAM_API = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
 
 # In-memory user registry (in production, use a DB)
-# Maps telegram chat_id → preferences
 _user_registry: dict[int, dict] = {}
 
-
-async def _send_message(chat_id: int, text: str):
-    """Send a text message to a Telegram chat."""
-    async with httpx.AsyncClient() as client:
-        await client.post(
-            f"{TELEGRAM_API}/sendMessage",
-            json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
-            timeout=10,
-        )
+# Dedup: track processed update IDs to prevent double processing
+_processed_updates: set[int] = set()
+_MAX_PROCESSED = 1000
 
 
-async def _send_voice(chat_id: int, voice_bytes: bytes):
-    """Send a voice note (MP3) to a Telegram chat."""
-    async with httpx.AsyncClient() as client:
-        await client.post(
-            f"{TELEGRAM_API}/sendVoice",
-            files={"voice": ("insight.mp3", voice_bytes, "audio/mpeg")},
-            data={"chat_id": str(chat_id)},
-            timeout=30,
-        )
+def _send_message_sync(chat_id: int, text: str):
+    """Send a text message (synchronous, for use in background threads)."""
+    httpx.post(
+        f"{TELEGRAM_API}/sendMessage",
+        json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+        timeout=10,
+    )
 
 
-async def _download_file(file_id: str) -> bytes:
-    """Download a file from Telegram by file_id."""
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{TELEGRAM_API}/getFile",
-            params={"file_id": file_id},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        file_path = resp.json()["result"]["file_path"]
+def _send_voice_sync(chat_id: int, voice_bytes: bytes):
+    """Send a voice note (synchronous, for background threads)."""
+    httpx.post(
+        f"{TELEGRAM_API}/sendVoice",
+        files={"voice": ("insight.mp3", voice_bytes, "audio/mpeg")},
+        data={"chat_id": str(chat_id)},
+        timeout=30,
+    )
 
-        resp = await client.get(
-            f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}",
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.content
+
+def _download_file_sync(file_id: str) -> bytes:
+    """Download a file from Telegram (synchronous)."""
+    resp = httpx.get(
+        f"{TELEGRAM_API}/getFile",
+        params={"file_id": file_id},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    file_path = resp.json()["result"]["file_path"]
+
+    resp = httpx.get(
+        f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}",
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.content
 
 
 def _generate_voice_insight(drift: dict) -> bytes | None:
     """Generate a TTS voice note for a drift insight. Returns MP3 bytes or None."""
     if not drift["detected"]:
         return None
-
     try:
         from services.tts import text_to_speech
-        # Clean markdown from message for TTS
         text = drift["message"].replace("*", "").replace("_", "")
         return text_to_speech(text)
     except Exception as e:
@@ -90,6 +88,11 @@ def _generate_voice_insight(drift: dict) -> bytes | None:
 
 def _process_entry(user_id: str, transcript: str) -> dict:
     """Process a journal entry: embed, analyze, store, drift check."""
+    from services.embedding import generate_embedding
+    from services.sentiment import analyze_sentiment
+    from services.keywords import extract_keywords
+    from services.qdrant_service import upsert_entry
+
     vector = generate_embedding(transcript)
     sentiment = analyze_sentiment(transcript)
     keywords = extract_keywords(transcript)
@@ -134,10 +137,8 @@ def _format_response(result: dict) -> str:
         mood = "😔"
 
     lines = [f"{mood} *Entry stored.*"]
-
     if keywords:
         lines.append(f"Themes: {', '.join(keywords[:3])}")
-
     if drift["skipped"]:
         lines.append(f"\n_{drift['message']}_")
     elif drift["detected"]:
@@ -153,7 +154,6 @@ def _generate_weekly_recap(user_id: str) -> str:
     """Generate a weekly recap text for a user."""
     now = datetime.now(timezone.utc)
     week_ago = int((now - timedelta(days=7)).timestamp())
-
     entries = scroll_entries(user_id=user_id, date_from=week_ago, limit=50)
 
     if not entries:
@@ -163,24 +163,21 @@ def _generate_weekly_recap(user_id: str) -> str:
     sentiments = [e.payload.get("sentiment_score", 0) for e in entries]
     avg_sentiment = sum(sentiments) / len(sentiments)
 
-    # Top keywords across all entries this week
     all_keywords: list[str] = []
     for e in entries:
         all_keywords.extend(e.payload.get("keywords", []))
     keyword_counts = Counter(all_keywords)
     top_keywords = [kw for kw, _ in keyword_counts.most_common(3)]
 
-    # Drift status
     drift = detect_drift(user_id)
 
-    # Build recap
     parts = [f"Here's your weekly reflection."]
     parts.append(f"You checked in {entry_count} times this week.")
 
     if avg_sentiment > 0.2:
         parts.append("Your overall mood was positive.")
     elif avg_sentiment > -0.2:
-        parts.append("Your overall mood was mixed — some good days, some tough ones.")
+        parts.append("Your overall mood was mixed.")
     else:
         parts.append("Your overall mood was lower than usual this week.")
 
@@ -190,157 +187,165 @@ def _generate_weekly_recap(user_id: str) -> str:
     if drift["detected"]:
         parts.append(f"Your entries are showing {drift['severity']} drift. {drift['message']}")
     else:
-        parts.append("Your patterns look consistent with your baseline. Keep up the practice.")
+        parts.append("Your patterns look consistent. Keep up the practice.")
 
     parts.append("Take care of yourself.")
-
     return " ".join(parts)
 
 
-# === Webhook handler ===
+# === Background processing functions ===
 
-@router.post("/telegram/webhook")
-async def telegram_webhook(request: Request):
-    """Handle incoming Telegram updates."""
-    body = await request.json()
-    message = body.get("message")
+def _handle_voice_bg(chat_id: int, user_id: str, file_id: str):
+    """Process voice note in background thread."""
+    try:
+        _send_message_sync(chat_id, "🎧 _Listening..._")
+        from services.transcription import transcribe_audio
 
-    if not message:
-        return {"ok": True}
+        audio_bytes = _download_file_sync(file_id)
+        transcript = transcribe_audio(audio_bytes)
 
-    chat_id = message["chat"]["id"]
-    user_id = f"tg_{chat_id}"
+        if not transcript.strip():
+            _send_message_sync(chat_id, "I couldn't make out what you said. Try again?")
+            return
 
-    # Register user
-    if chat_id not in _user_registry:
-        _user_registry[chat_id] = {"user_id": user_id, "registered": True}
+        result = _process_entry(user_id, transcript)
+        _send_message_sync(chat_id, _format_response(result))
 
-    # /start command
-    if message.get("text", "").startswith("/start"):
-        await _send_message(
-            chat_id,
-            "🌊 *Welcome to MoodDrift!*\n\n"
-            "I'm your voice journal companion. Here's how to use me:\n\n"
-            "🎤 *Send a voice note* — tell me how you're feeling\n"
-            "✍️ *Send a text* — type out your thoughts\n"
-            "📊 /status — see your current emotional drift\n"
-            "📅 /recap — get your weekly summary\n\n"
-            "I'll check in with you daily and notice patterns "
-            "you might miss. Everything you share stays private.\n\n"
-            "_Send your first entry now — how are you feeling today?_"
-        )
-        return {"ok": True}
+        if result["drift"]["detected"]:
+            voice = _generate_voice_insight(result["drift"])
+            if voice:
+                _send_voice_sync(chat_id, voice)
+    except Exception as e:
+        _send_message_sync(chat_id, "Sorry, something went wrong. Try again?")
+        print(f"[telegram] voice bg error: {e}")
 
-    # /status command
-    if message.get("text", "").startswith("/status"):
+
+def _handle_text_bg(chat_id: int, user_id: str, text: str):
+    """Process text message in background thread."""
+    try:
+        result = _process_entry(user_id, text)
+        _send_message_sync(chat_id, _format_response(result))
+
+        if result["drift"]["detected"]:
+            voice = _generate_voice_insight(result["drift"])
+            if voice:
+                _send_voice_sync(chat_id, voice)
+    except Exception as e:
+        _send_message_sync(chat_id, "Sorry, something went wrong. Try again?")
+        print(f"[telegram] text bg error: {e}")
+
+
+def _handle_status_bg(chat_id: int, user_id: str):
+    """Process /status in background thread."""
+    try:
         drift = detect_drift(user_id)
         if drift["skipped"]:
-            await _send_message(chat_id, f"📊 {drift['message']}")
+            _send_message_sync(chat_id, f"📊 {drift['message']}")
         elif drift["detected"]:
-            await _send_message(
+            _send_message_sync(
                 chat_id,
                 f"📊 *Drift detected* ({drift['severity']})\n"
                 f"Score: {drift['drift_score']:.3f}\n"
                 f"Direction: {drift['sentiment_direction']}\n\n"
                 f"{drift['message']}"
             )
-            # Feature 4: Send voice summary when drift detected
             voice = _generate_voice_insight(drift)
             if voice:
-                await _send_voice(chat_id, voice)
+                _send_voice_sync(chat_id, voice)
         else:
-            await _send_message(chat_id, f"📊 *Stable*\n{drift['message']}")
-        return {"ok": True}
+            _send_message_sync(chat_id, f"📊 *Stable*\n{drift['message']}")
+    except Exception as e:
+        _send_message_sync(chat_id, "Sorry, couldn't fetch status right now.")
+        print(f"[telegram] status bg error: {e}")
 
-    # /recap command — on-demand weekly recap
-    if message.get("text", "").startswith("/recap"):
+
+def _handle_recap_bg(chat_id: int, user_id: str):
+    """Process /recap in background thread."""
+    try:
         recap_text = _generate_weekly_recap(user_id)
-        await _send_message(chat_id, f"📅 *Weekly Recap*\n\n{recap_text}")
+        _send_message_sync(chat_id, f"📅 *Weekly Recap*\n\n{recap_text}")
 
-        # Feature 5: Send as voice note too
-        try:
-            from services.tts import text_to_speech
-            voice = text_to_speech(recap_text)
-            await _send_voice(chat_id, voice)
-        except Exception as e:
-            print(f"[telegram] recap TTS error: {e}")
+        from services.tts import text_to_speech
+        voice = text_to_speech(recap_text)
+        _send_voice_sync(chat_id, voice)
+    except Exception as e:
+        _send_message_sync(chat_id, "Sorry, couldn't generate recap right now.")
+        print(f"[telegram] recap bg error: {e}")
 
+
+# === Webhook — returns 200 INSTANTLY, processes in background ===
+
+@router.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """Handle incoming Telegram updates. Returns immediately, processes in background."""
+    body = await request.json()
+
+    # Dedup — prevent double processing from Telegram retries
+    update_id = body.get("update_id")
+    if update_id:
+        if update_id in _processed_updates:
+            return {"ok": True}
+        _processed_updates.add(update_id)
+        if len(_processed_updates) > _MAX_PROCESSED:
+            _processed_updates.clear()
+
+    message = body.get("message")
+    if not message:
         return {"ok": True}
 
-    # Voice note — Feature 2
-    if message.get("voice"):
-        file_id = message["voice"]["file_id"]
-        await _send_message(chat_id, "🎧 _Listening to your voice note..._")
+    chat_id = message["chat"]["id"]
+    user_id = f"tg_{chat_id}"
 
-        try:
-            audio_bytes = await _download_file(file_id)
-            transcript = transcribe_audio(audio_bytes)
+    if chat_id not in _user_registry:
+        _user_registry[chat_id] = {"user_id": user_id}
 
-            if not transcript.strip():
-                await _send_message(chat_id, "I couldn't make out what you said. Try again?")
-                return {"ok": True}
-
-            result = _process_entry(user_id, transcript)
-            reply = _format_response(result)
-            await _send_message(chat_id, reply)
-
-            # Feature 4: If drift detected, also send voice insight
-            if result["drift"]["detected"]:
-                voice = _generate_voice_insight(result["drift"])
-                if voice:
-                    await _send_voice(chat_id, voice)
-
-        except Exception as e:
-            await _send_message(chat_id, "Sorry, something went wrong processing your voice note. Try sending text instead.")
-            print(f"[telegram] voice note error: {e}")
-
-        return {"ok": True}
-
-    # Text message — Feature 3
     text = message.get("text", "").strip()
-    if text and not text.startswith("/"):
-        try:
-            result = _process_entry(user_id, text)
-            reply = _format_response(result)
-            await _send_message(chat_id, reply)
 
-            # Feature 4: If drift detected, also send voice insight
-            if result["drift"]["detected"]:
-                voice = _generate_voice_insight(result["drift"])
-                if voice:
-                    await _send_voice(chat_id, voice)
-
-        except Exception as e:
-            await _send_message(chat_id, "Sorry, something went wrong. Please try again.")
-            print(f"[telegram] text error: {e}")
-
+    # /start — respond inline (fast, no processing needed)
+    if text.startswith("/start"):
+        _send_message_sync(
+            chat_id,
+            "🌊 *Welcome to MoodDrift!*\n\n"
+            "🎤 *Send a voice note* — tell me how you're feeling\n"
+            "✍️ *Send text* — type your thoughts\n"
+            "📊 /status — current drift\n"
+            "📅 /recap — weekly summary\n\n"
+            "_How are you feeling today?_"
+        )
         return {"ok": True}
+
+    # Everything else → background thread
+    if text.startswith("/status"):
+        threading.Thread(target=_handle_status_bg, args=(chat_id, user_id), daemon=True).start()
+    elif text.startswith("/recap"):
+        threading.Thread(target=_handle_recap_bg, args=(chat_id, user_id), daemon=True).start()
+    elif message.get("voice"):
+        file_id = message["voice"]["file_id"]
+        threading.Thread(target=_handle_voice_bg, args=(chat_id, user_id, file_id), daemon=True).start()
+    elif text and not text.startswith("/"):
+        threading.Thread(target=_handle_text_bg, args=(chat_id, user_id, text), daemon=True).start()
 
     return {"ok": True}
 
 
-# === Cron endpoints (called by external scheduler like cron-job.org) ===
+# === Cron endpoints ===
 
 @router.post("/telegram/nudge")
 async def send_daily_nudge():
-    """Feature 1: Send daily check-in nudge to all registered users.
-
-    Call this endpoint via an external cron service (e.g. cron-job.org)
-    at the desired time (e.g. 8 PM IST daily).
-    """
+    """Feature 1: Send daily check-in nudge to all registered users."""
+    import random
     nudge_messages = [
         "Hey, how are you feeling today? Send me a voice note or text 🎤",
         "Time for your daily check-in. How was your day? 🌙",
-        "Quick check-in — what's on your mind today? I'm listening 💭",
-        "How are you doing? Even a one-line reply helps track your patterns 📊",
+        "Quick check-in — what's on your mind today? 💭",
+        "How are you doing? Even a one-line reply helps 📊",
     ]
-    import random
     msg = random.choice(nudge_messages)
 
     sent = 0
     for chat_id in _user_registry:
         try:
-            await _send_message(chat_id, msg)
+            _send_message_sync(chat_id, msg)
             sent += 1
         except Exception as e:
             print(f"[telegram] nudge error for {chat_id}: {e}")
@@ -350,21 +355,11 @@ async def send_daily_nudge():
 
 @router.post("/telegram/weekly-recap")
 async def send_weekly_recap():
-    """Feature 5: Send weekly voice recap to all registered users.
-
-    Call this endpoint via external cron (e.g. Sunday 8 PM IST).
-    """
+    """Feature 5: Send weekly voice recap to all registered users."""
     sent = 0
     for chat_id, info in _user_registry.items():
-        user_id = info["user_id"]
         try:
-            recap_text = _generate_weekly_recap(user_id)
-            await _send_message(chat_id, f"📅 *Your Weekly Recap*\n\n{recap_text}")
-
-            # Send as voice note
-            from services.tts import text_to_speech
-            voice = text_to_speech(recap_text)
-            await _send_voice(chat_id, voice)
+            _handle_recap_bg(chat_id, info["user_id"])
             sent += 1
         except Exception as e:
             print(f"[telegram] weekly recap error for {chat_id}: {e}")
