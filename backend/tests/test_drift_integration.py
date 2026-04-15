@@ -90,7 +90,7 @@ class TestDriftDetectionWithSeedData:
         expected_keys = {
             "detected", "drift_score", "similarity", "severity",
             "message", "matching_period", "matching_context",
-            "sentiment_direction", "skipped", "skip_reason",
+            "coping_strategies", "sentiment_direction", "skipped", "skip_reason",
         }
         assert set(result.keys()) == expected_keys
 
