@@ -1,5 +1,22 @@
 const API_BASE = "http://localhost:8000";
 
+let _currentUser = "demo_user";
+
+export function setCurrentUser(userId: string) {
+  _currentUser = userId;
+}
+
+export function getCurrentUser() {
+  return _currentUser;
+}
+
+export const USER_PROFILES: Record<string, { label: string; description: string }> = {
+  demo_user: { label: "Karan (Professional)", description: "Work burnout → recovery → new drift" },
+  student_ananya: { label: "Ananya (Student)", description: "Exam anxiety → isolation → finding balance" },
+  parent_rahul: { label: "Rahul (New Parent)", description: "Sleep deprivation → relationship strain → rhythm" },
+  athlete_priya: { label: "Priya (Athlete)", description: "Injury → frustration → rehab → comeback anxiety" },
+};
+
 export interface Entry {
   id: string;
   date: string;
@@ -42,24 +59,24 @@ export interface DriftCurrent {
 }
 
 export async function fetchEntries(days = 90): Promise<Entry[]> {
-  const res = await fetch(`${API_BASE}/api/entries?days=${days}`);
+  const res = await fetch(`${API_BASE}/api/entries?user_id=${_currentUser}&days=${days}`);
   const data = await res.json();
   return data.entries;
 }
 
 export async function fetchVisualization(days = 90): Promise<VisualizationPoint[]> {
-  const res = await fetch(`${API_BASE}/api/visualization?days=${days}`);
+  const res = await fetch(`${API_BASE}/api/visualization?user_id=${_currentUser}&days=${days}`);
   const data = await res.json();
   return data.points;
 }
 
 export async function fetchDriftTimeline(days = 90): Promise<DriftTimelinePoint[]> {
-  const res = await fetch(`${API_BASE}/api/drift-timeline?days=${days}`);
+  const res = await fetch(`${API_BASE}/api/drift-timeline?user_id=${_currentUser}&days=${days}`);
   const data = await res.json();
   return data.timeline;
 }
 
 export async function fetchDriftCurrent(): Promise<DriftCurrent> {
-  const res = await fetch(`${API_BASE}/api/drift-current`);
+  const res = await fetch(`${API_BASE}/api/drift-current?user_id=${_currentUser}`);
   return await res.json();
 }
