@@ -759,6 +759,118 @@ body {
   border: 1px solid var(--border);
 }
 
+/* Trusted contact input */
+.setting-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  width: 100%;
+  max-width: 300px;
+  margin-top: 6px;
+  transition: border-color 0.15s;
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.setting-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* WhatsApp Concept Mockup */
+.whatsapp-concept {
+  margin-top: 4px;
+}
+
+.whatsapp-mockup {
+  background: #e5ddd5;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.whatsapp-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #075e54;
+  color: white;
+}
+
+.whatsapp-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #25d366;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.whatsapp-header div {
+  display: flex;
+  flex-direction: column;
+}
+
+.whatsapp-header strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.whatsapp-header span {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.whatsapp-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h60v60H0z' fill='%23d4cdc4' fill-opacity='.15'/%3E%3C/svg%3E");
+}
+
+.whatsapp-bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+}
+
+.whatsapp-bubble--bot {
+  background: white;
+  color: #303030;
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+}
+
+.whatsapp-bubble--user {
+  background: #dcf8c6;
+  color: #303030;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+  font-weight: 500;
+}
+
+.whatsapp-note {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 10px;
+  font-style: italic;
+}
+
 /* ====== Disclaimer ====== */
 .disclaimer {
   margin-top: 32px;
