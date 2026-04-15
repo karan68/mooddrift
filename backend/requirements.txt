@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+qdrant-client
+sentence-transformers
+nltk
+pydantic-settings
+python-dotenv
+httpx
+umap-learn
+scikit-learn
