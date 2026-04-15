@@ -39,14 +39,18 @@ function App() {
         </div>
         <div className="topbar-profiles">
           {Object.entries(USER_PROFILES).map(([id, p]) => (
-            <button
-              key={id}
-              className={`profile-pill ${id === activeUser ? "profile-pill--active" : ""}`}
-              onClick={() => switchUser(id)}
-              title={p.tooltip}
-            >
-              {p.label.split(" ")[0]}
-            </button>
+            <div key={id} className="profile-wrap">
+              <button
+                className={`profile-pill ${id === activeUser ? "profile-pill--active" : ""}`}
+                onClick={() => switchUser(id)}
+              >
+                {p.label.split(" ")[0]}
+              </button>
+              <div className="profile-tooltip">
+                <strong>{p.label}</strong>
+                <span>{p.tooltip}</span>
+              </div>
+            </div>
           ))}
         </div>
       </header>
