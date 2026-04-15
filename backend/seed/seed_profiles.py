@@ -278,6 +278,9 @@ TEACHER_ENTRIES = [
     ("2026-03-21", "Morning yoga before school has become non-negotiable. 20 minutes that change the entire day."),
     ("2026-03-24", "Colleague asked how I changed. Told her about the sabbatical and boundaries. She's considering the same."),
     ("2026-03-27", "Sleeping 8 hours. Eating well. Reading every night. Teaching feels like a calling again, not a burden."),
+    ("2026-03-28", "Had a wonderful conversation with a student about her future. These moments remind me why I teach."),
+    ("2026-03-29", "Evening walk with a colleague. We talked about life, not work. Friendship matters."),
+    ("2026-03-30", "Cooked a new recipe tonight. The kitchen smelled amazing. Small joys add up."),
     ("2026-03-31", "Best month of my career. Not because of results — because I'm sustainable. I can do this for years now."),
 
     # Apr 1-14: Thriving and growing — POSITIVE ending (8)

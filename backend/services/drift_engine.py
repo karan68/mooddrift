@@ -217,28 +217,26 @@ def detect_drift(user_id: str, new_entry_vector: Optional[list[float]] = None) -
 
             if sentiment_direction == "improving":
                 pattern_message = (
-                    f"You seem to be feeling better than your baseline! "
-                    f"Your recent entries have a more positive tone."
+                    "You seem to be in a better place than before. "
+                    "Your recent entries carry a more positive, hopeful tone."
                 )
             else:
                 pattern_message = (
-                    f"I noticed your recent entries feel similar to {matching_period}"
+                    f"Your recent entries feel similar to how you were "
+                    f"around {matching_period}."
                 )
-                if matching_context:
-                    pattern_message += (
-                        f" when you described themes like "
-                        f"{', '.join(matching_context[:3])}"
-                    )
-                pattern_message += "."
                 if coping_strategies:
-                    # Surface what helped last time
-                    strategy = coping_strategies[0][:150]
+                    # Surface what helped — therapist-style, actionable
+                    strategy = coping_strategies[0][:200]
                     pattern_message += (
-                        f" Last time, what helped was: \"{strategy}\""
+                        f" Last time you went through this, you found something "
+                        f"that helped: \"{strategy}\" — would any of that "
+                        f"work for you right now?"
                     )
                 elif snippet:
                     pattern_message += (
-                        f" Back then you said: \"{snippet}...\""
+                        f" Back then you described feeling like this: "
+                        f"\"{snippet}...\" — does that resonate?"
                     )
         else:
             if sentiment_direction == "improving":
@@ -254,17 +252,14 @@ def detect_drift(user_id: str, new_entry_vector: Optional[list[float]] = None) -
 
     # Build message
     if not detected:
-        message = "Your emotional patterns look consistent with your baseline."
+        message = "Your emotional patterns look steady. Keep checking in — consistency helps build clarity over time."
     else:
-        severity_text = {
-            "mild": "a slight shift",
-            "moderate": "a noticeable change",
-            "significant": "a significant shift",
+        severity_intro = {
+            "mild": "I'm noticing a subtle shift in your recent entries.",
+            "moderate": "Something seems different in how you've been feeling lately.",
+            "significant": "Your recent entries feel quite different from how you were before.",
         }
-        message = (
-            f"I noticed {severity_text.get(severity, 'a shift')} "
-            f"in your recent entries. {pattern_message}"
-        )
+        message = f"{severity_intro.get(severity, 'I noticed a shift.')} {pattern_message}"
 
     return {
         "detected": detected,
