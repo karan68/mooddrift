@@ -65,12 +65,15 @@ ENTRIES = [
     ("2026-02-18", "Called in sick today. I just couldn't face it. Stayed in bed most of the day. Feel guilty."),
     ("2026-02-20", "Hit rock bottom this week. I told my manager I need help. She was understanding. Maybe things will change."),
 
-    # ===== Feb 21-28: Recovery (5 entries) =====
+    # ===== Feb 21-28: Recovery (5 entries + 2 coping strategies) =====
     ("2026-02-21", "Took a mental health day. Went for a long walk. Starting to feel a tiny bit better."),
     ("2026-02-23", "Manager redistributed some tasks. Workload is lighter. Slept 6 hours. Small improvement."),
     ("2026-02-24", "Went back to the gym for the first time in weeks. It was hard but I did it. Feeling hopeful."),
     ("2026-02-26", "Taking things one day at a time. Set boundaries at work — leaving at 6pm. Feeling more in control."),
     ("2026-02-28", "End of February. Recovery is happening. I learned that taking a weekend completely offline helps reset things."),
+    # Coping strategies — tagged separately
+    ("2026-02-27", "COPING: What helped me recover from burnout — taking a full weekend completely offline, no laptop no emails. Also going back to the gym and setting a hard boundary to leave work by 6pm every day."),
+    ("2026-02-28", "COPING: Telling my manager I was struggling was the turning point. She redistributed tasks and I felt heard. Speaking up and asking for help was the hardest but most important thing."),
 
     # ===== Mar 1-31: Stable again — new baseline (15 entries) =====
     ("2026-03-01", "Fresh month, fresh start. Work is manageable again. Feeling cautiously optimistic."),
@@ -123,24 +126,29 @@ def seed():
             tzinfo=timezone.utc,
         )
 
-        vector = generate_embedding(transcript)
-        sentiment = analyze_sentiment(transcript)
-        keywords = extract_keywords(transcript)
+        # Detect coping strategy entries
+        is_coping = transcript.startswith("COPING:")
+        clean_transcript = transcript.replace("COPING: ", "") if is_coping else transcript
+
+        vector = generate_embedding(clean_transcript)
+        sentiment = analyze_sentiment(clean_transcript)
+        keywords = extract_keywords(clean_transcript)
 
         payload = {
             "user_id": SEED_USER,
             "date": date_str,
             "timestamp": int(dt.timestamp()),
-            "transcript": transcript,
+            "transcript": clean_transcript,
             "sentiment_score": sentiment,
             "keywords": keywords,
             "week_number": dt.isocalendar()[1],
             "month": dt.strftime("%Y-%m"),
-            "entry_type": "checkin",
+            "entry_type": "coping_strategy" if is_coping else "checkin",
         }
 
         point_id = upsert_entry(vector, payload)
-        print(f"  [{i+1:2d}/{len(ENTRIES)}] {date_str} | sentiment={sentiment:+.2f} | {point_id[:8]}...")
+        tag = " [COPING]" if is_coping else ""
+        print(f"  [{i+1:2d}/{len(ENTRIES)}] {date_str} | sentiment={sentiment:+.2f} | {point_id[:8]}...{tag}")
 
     print(f"\nDone! Seeded {len(ENTRIES)} entries.")
 

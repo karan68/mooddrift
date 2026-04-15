@@ -21,7 +21,7 @@ from typing import Optional
 import numpy as np
 
 from config import settings
-from services.qdrant_service import scroll_entries, search_similar
+from services.qdrant_service import scroll_entries, search_similar, search_coping_strategies
 
 
 def compute_centroid(vectors: list[list[float]]) -> np.ndarray:
@@ -169,6 +169,7 @@ def detect_drift(user_id: str, new_entry_vector: Optional[list[float]] = None) -
     # 6. Pattern matching (only if drift detected)
     matching_period = None
     matching_context = None
+    coping_strategies = None
     pattern_message = ""
 
     if detected:
@@ -190,6 +191,26 @@ def detect_drift(user_id: str, new_entry_vector: Optional[list[float]] = None) -
                 all_keywords.extend(m.payload.get("keywords", []))
             matching_context = list(dict.fromkeys(all_keywords))[:5]
 
+            # Find timestamp range of matching period for coping search
+            match_timestamps = [m.payload.get("timestamp", 0) for m in historical_matches]
+            match_start = min(match_timestamps) if match_timestamps else 0
+            match_end = max(match_timestamps) if match_timestamps else 0
+
+            # Search for coping strategies from the matching period
+            # Look in a window around the match (match end + 30 days for recovery)
+            if match_end > 0:
+                coping_entries = search_coping_strategies(
+                    user_id=user_id,
+                    date_from=match_start,
+                    date_to=match_end + (30 * 86400),
+                    limit=3,
+                )
+                if coping_entries:
+                    coping_strategies = [
+                        e.payload.get("transcript", "")
+                        for e in coping_entries
+                    ]
+
             # Get a representative transcript snippet
             top_transcript = historical_matches[0].payload.get("transcript", "")
             snippet = top_transcript[:100] if top_transcript else ""
@@ -209,7 +230,13 @@ def detect_drift(user_id: str, new_entry_vector: Optional[list[float]] = None) -
                         f"{', '.join(matching_context[:3])}"
                     )
                 pattern_message += "."
-                if snippet:
+                if coping_strategies:
+                    # Surface what helped last time
+                    strategy = coping_strategies[0][:150]
+                    pattern_message += (
+                        f" Last time, what helped was: \"{strategy}\""
+                    )
+                elif snippet:
                     pattern_message += (
                         f" Back then you said: \"{snippet}...\""
                     )
@@ -247,6 +274,7 @@ def detect_drift(user_id: str, new_entry_vector: Optional[list[float]] = None) -
         "message": message,
         "matching_period": matching_period,
         "matching_context": matching_context,
+        "coping_strategies": coping_strategies,
         "sentiment_direction": sentiment_direction,
         "skipped": False,
         "skip_reason": None,

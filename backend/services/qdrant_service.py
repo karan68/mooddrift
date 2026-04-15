@@ -42,6 +42,11 @@ def create_collection():
         field_name="timestamp",
         field_schema=PayloadSchemaType.INTEGER,
     )
+    _client.create_payload_index(
+        collection_name=settings.collection_name,
+        field_name="entry_type",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
 
 
 def upsert_entry(vector: list[float], payload: dict) -> str:
@@ -112,6 +117,35 @@ def search_similar(
         limit=limit,
     )
     return results.points
+
+
+def search_coping_strategies(
+    user_id: str,
+    date_from: int | None = None,
+    date_to: int | None = None,
+    limit: int = 5,
+):
+    """Find coping strategy entries for a user within an optional date range."""
+    conditions = [
+        FieldCondition(key="user_id", match=MatchValue(value=user_id)),
+        FieldCondition(key="entry_type", match=MatchValue(value="coping_strategy")),
+    ]
+    if date_from is not None:
+        conditions.append(
+            FieldCondition(key="timestamp", range=Range(gte=date_from))
+        )
+    if date_to is not None:
+        conditions.append(
+            FieldCondition(key="timestamp", range=Range(lt=date_to))
+        )
+
+    results, _ = _client.scroll(
+        collection_name=settings.collection_name,
+        scroll_filter=Filter(must=conditions),
+        limit=limit,
+        with_vectors=False,
+    )
+    return results
 
 
 def delete_entries(user_id: str) -> int:

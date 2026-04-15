@@ -86,7 +86,7 @@ def _generate_voice_insight(drift: dict) -> bytes | None:
         return None
 
 
-def _process_entry(user_id: str, transcript: str) -> dict:
+def _process_entry(user_id: str, transcript: str, entry_type: str = "checkin") -> dict:
     """Process a journal entry: embed, analyze, store, drift check."""
     from services.embedding import generate_embedding
     from services.sentiment import analyze_sentiment
@@ -107,7 +107,7 @@ def _process_entry(user_id: str, transcript: str) -> dict:
         "keywords": keywords,
         "week_number": now.isocalendar()[1],
         "month": now.strftime("%Y-%m"),
-        "entry_type": "checkin",
+        "entry_type": entry_type,
     }
 
     point_id = upsert_entry(vector, payload)
@@ -121,7 +121,11 @@ def _process_entry(user_id: str, transcript: str) -> dict:
     }
 
 
-def _format_response(result: dict) -> str:
+# Track users who were asked "what helped?" — awaiting coping response
+_awaiting_coping: set[int] = set()
+
+
+def _format_response(result: dict, chat_id: int | None = None) -> str:
     """Format the processing result into a user-friendly text reply."""
     sentiment = result["sentiment"]
     keywords = result["keywords"]
@@ -146,6 +150,15 @@ def _format_response(result: dict) -> str:
         lines.append(drift["message"])
     else:
         lines.append(f"\n✦ {drift['message']}")
+
+    # If sentiment is positive and recent drift was detected, ask what helped
+    if sentiment > 0.2 and not drift.get("skipped") and chat_id is not None:
+        lines.append(
+            "\n💡 _It sounds like things are improving. "
+            "What's been helping you feel better? "
+            "Reply and I'll remember it for next time._"
+        )
+        _awaiting_coping.add(chat_id)
 
     return "\n".join(lines)
 
@@ -209,7 +222,7 @@ def _handle_voice_bg(chat_id: int, user_id: str, file_id: str):
             return
 
         result = _process_entry(user_id, transcript)
-        _send_message_sync(chat_id, _format_response(result))
+        _send_message_sync(chat_id, _format_response(result, chat_id))
 
         if result["drift"]["detected"]:
             voice = _generate_voice_insight(result["drift"])
@@ -223,8 +236,19 @@ def _handle_voice_bg(chat_id: int, user_id: str, file_id: str):
 def _handle_text_bg(chat_id: int, user_id: str, text: str):
     """Process text message in background thread."""
     try:
+        # Check if this is a coping strategy response
+        if chat_id in _awaiting_coping:
+            _awaiting_coping.discard(chat_id)
+            _process_entry(user_id, text, entry_type="coping_strategy")
+            _send_message_sync(
+                chat_id,
+                "✅ *Coping strategy saved.* I'll remind you of this "
+                "if I notice a similar pattern in the future."
+            )
+            return
+
         result = _process_entry(user_id, text)
-        _send_message_sync(chat_id, _format_response(result))
+        _send_message_sync(chat_id, _format_response(result, chat_id))
 
         if result["drift"]["detected"]:
             voice = _generate_voice_insight(result["drift"])
