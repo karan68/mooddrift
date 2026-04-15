@@ -4,13 +4,14 @@ import {
   fetchVisualization,
   fetchDriftTimeline,
   fetchDriftCurrent,
+  getCurrentUser,
   type Entry,
   type VisualizationPoint,
   type DriftTimelinePoint,
   type DriftCurrent,
 } from "../utils/api";
 
-const POLL_INTERVAL = 5000; // 5 seconds — per Fix 1 in PROJECT.md
+const POLL_INTERVAL = 10000; // 10 seconds for things that should poll
 
 export function useEntries(days = 90) {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -21,6 +22,7 @@ export function useEntries(days = 90) {
   }, [days]);
 
   useEffect(() => {
+    setLoading(true);
     refresh();
     const id = setInterval(refresh, POLL_INTERVAL);
     return () => clearInterval(id);
@@ -33,15 +35,11 @@ export function useVisualization(days = 90) {
   const [points, setPoints] = useState<VisualizationPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
+  // NO polling — fetch once, it's expensive (UMAP)
+  useEffect(() => {
+    setLoading(true);
     fetchVisualization(days).then(setPoints).finally(() => setLoading(false));
   }, [days]);
-
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [refresh]);
 
   return { points, loading };
 }
@@ -50,15 +48,11 @@ export function useDriftTimeline(days = 90) {
   const [timeline, setTimeline] = useState<DriftTimelinePoint[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
+  // NO polling — fetch once per tab switch
+  useEffect(() => {
+    setLoading(true);
     fetchDriftTimeline(days).then(setTimeline).finally(() => setLoading(false));
   }, [days]);
-
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [refresh]);
 
   return { timeline, loading };
 }
@@ -72,6 +66,7 @@ export function useDriftCurrent() {
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     refresh();
     const id = setInterval(refresh, POLL_INTERVAL);
     return () => clearInterval(id);

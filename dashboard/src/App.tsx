@@ -43,7 +43,7 @@ function App() {
               key={id}
               className={`profile-pill ${id === activeUser ? "profile-pill--active" : ""}`}
               onClick={() => switchUser(id)}
-              title={p.description}
+              title={p.tooltip}
             >
               {p.label.split(" ")[0]}
             </button>

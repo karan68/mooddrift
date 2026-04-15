@@ -10,11 +10,27 @@ export function getCurrentUser() {
   return _currentUser;
 }
 
-export const USER_PROFILES: Record<string, { label: string; description: string }> = {
-  demo_user: { label: "Karan (Professional)", description: "Work burnout → recovery → new drift" },
-  student_ananya: { label: "Ananya (Student)", description: "Exam anxiety → isolation → finding balance" },
-  parent_rahul: { label: "Rahul (New Parent)", description: "Sleep deprivation → relationship strain → rhythm" },
-  athlete_priya: { label: "Priya (Athlete)", description: "Injury → frustration → rehab → comeback anxiety" },
+export const USER_PROFILES: Record<string, { label: string; description: string; tooltip: string }> = {
+  demo_user: {
+    label: "Karan (Professional)",
+    description: "Work burnout → recovery → new drift",
+    tooltip: "Karan: Software engineer. Stable Jan → burnout Feb (overwork, insomnia) → recovery (took weekend off, set boundaries) → stable Mar → new drift Apr (deadline pressure). Demonstrates full drift detection + coping recall.",
+  },
+  student_ananya: {
+    label: "Ananya (Student)",
+    description: "Exam anxiety → isolation → finding balance",
+    tooltip: "Ananya: College student. Confident Jan → midterm anxiety Feb (panic attacks, isolation, skipping meals) → counseling + friends → stable Mar → finals approaching Apr. Shows exam stress spiral + social support as coping.",
+  },
+  parent_rahul: {
+    label: "Rahul (New Parent)",
+    description: "Sleep deprivation → relationship strain → rhythm",
+    tooltip: "Rahul: New father. Joy + exhaustion Jan → work guilt Feb (3hrs sleep, fights with wife) → asked for help, in-laws came → rhythm Mar → sleep regression Apr. Shows relationship strain + asking for help.",
+  },
+  athlete_priya: {
+    label: "Priya (Athlete)",
+    description: "Injury → frustration → rehab → comeback anxiety",
+    tooltip: "Priya: Runner, ACL tear. Peak performance Jan → injury Feb (devastation, identity crisis) → rehab + coaching → strong comeback Mar → knee twinge anxiety Apr. Shows identity loss + gradual recovery.",
+  },
 };
 
 export interface Entry {
