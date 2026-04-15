@@ -395,47 +395,39 @@ body {
   color: var(--text-secondary);
 }
 
+.insight-detail-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
+}
+
+.insight-expand {
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 6px;
+  transition: color 0.15s;
+}
+
+.insight-expand:hover {
+  color: var(--accent-hover);
+}
+
 .insight-detail {
   font-size: 13px;
   color: var(--text-tertiary);
   margin-top: 4px;
 }
 
-.insight-meta {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  flex-wrap: wrap;
-}
-
-.insight-period, .insight-themes {
-  font-size: 11px;
-  background: var(--bg);
-  color: var(--text-secondary);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-light);
-}
-
-.insight-score {
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.insight-score-value {
-  font-family: var(--font-display);
-  font-size: 28px;
-  color: var(--warm);
-  line-height: 1;
-}
-
-.insight-score-label {
-  font-size: 10px;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 2px;
-}
+/* (insight-meta and insight-score removed — user-facing card shouldn't show raw data) */
 
 /* ====== Entry List (Journal tab) ====== */
 .panel {

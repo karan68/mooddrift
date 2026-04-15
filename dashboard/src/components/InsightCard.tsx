@@ -1,19 +1,19 @@
+import { useState } from "react";
 import { useDriftCurrent } from "../hooks/useEntries";
 
 export default function InsightCard() {
   const { drift, loading } = useDriftCurrent();
+  const [expanded, setExpanded] = useState(false);
 
   if (loading) {
     return (
       <div className="insight-card insight-card--loading">
-        <p>Analyzing your emotional patterns…</p>
+        <p>Checking your patterns…</p>
       </div>
     );
   }
 
   if (!drift || drift.skipped) {
-    const reason = drift?.skip_reason || "";
-    const isNew = reason.includes("recent") || reason.includes("baseline");
     return (
       <div className="insight-card insight-card--calibrating">
         <div className="insight-icon">🌱</div>
@@ -23,7 +23,6 @@ export default function InsightCard() {
             Keep checking in daily. MoodDrift needs about 2 weeks of entries
             to start recognizing your emotional patterns.
           </p>
-          {isNew && <p className="insight-detail">{drift?.message}</p>}
         </div>
       </div>
     );
@@ -32,6 +31,12 @@ export default function InsightCard() {
   if (drift.detected) {
     const icon = drift.sentiment_direction === "improving" ? "🌤️" : "⚠️";
     const tone = drift.sentiment_direction === "improving" ? "positive" : "alert";
+
+    // Split message into headline (first sentence) and detail (rest)
+    const firstDot = drift.message.indexOf(". ");
+    const headline = firstDot > 0 ? drift.message.slice(0, firstDot + 1) : drift.message;
+    const detail = firstDot > 0 ? drift.message.slice(firstDot + 2) : "";
+
     return (
       <div className={`insight-card insight-card--${tone}`}>
         <div className="insight-icon">{icon}</div>
@@ -45,21 +50,18 @@ export default function InsightCard() {
                   ? "A noticeable change"
                   : "Something important"}
           </h2>
-          <p className="insight-message">{drift.message}</p>
-          {drift.matching_period && (
-            <div className="insight-meta">
-              <span className="insight-period">Pattern match: {drift.matching_period}</span>
-              {drift.matching_context && drift.matching_context.length > 0 && (
-                <span className="insight-themes">
-                  Themes: {drift.matching_context.slice(0, 3).join(", ")}
-                </span>
-              )}
-            </div>
+          <p className="insight-message">{headline}</p>
+          {detail && (
+            <>
+              {expanded && <p className="insight-detail-text">{detail}</p>}
+              <button
+                className="insight-expand"
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? "Show less" : "Read more"}
+              </button>
+            </>
           )}
-        </div>
-        <div className="insight-score">
-          <div className="insight-score-value">{(drift.drift_score * 100).toFixed(0)}</div>
-          <div className="insight-score-label">drift</div>
         </div>
       </div>
     );
@@ -72,8 +74,8 @@ export default function InsightCard() {
       <div className="insight-content">
         <h2>You're in a good place</h2>
         <p>
-          Your recent entries are consistent with your baseline.
-          Keep up the practice — patterns become clearer over time.
+          Your recent entries feel steady. Keep checking in —
+          patterns become clearer over time.
         </p>
       </div>
     </div>
