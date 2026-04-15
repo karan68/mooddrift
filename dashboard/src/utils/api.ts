@@ -31,6 +31,11 @@ export const USER_PROFILES: Record<string, { label: string; description: string;
     description: "Injury → frustration → rehab → comeback anxiety",
     tooltip: "Priya: Runner, ACL tear. Peak performance Jan → injury Feb (devastation, identity crisis) → rehab + coaching → strong comeback Mar → knee twinge anxiety Apr. Shows identity loss + gradual recovery.",
   },
+  teacher_meera: {
+    label: "Meera (Teacher) ✦",
+    description: "Burnout → sabbatical → thriving",
+    tooltip: "Meera: School teacher. Exhaustion + frustration Jan (overcrowded classes, no support) → took sabbatical Feb → traveled, journaled, rediscovered joy → returned Mar with new approach → thriving Apr. POSITIVE ARC — shows MoodDrift celebrating improvement.",
+  },
 };
 
 export interface Entry {

@@ -231,11 +231,72 @@ ATHLETE_ENTRIES = [
     ("2026-04-14", "The anxiety about my knee is exactly like February — lying awake, catastrophizing, losing confidence. I need to talk to someone before the meet."),
 ]
 
+# =====================================================================
+# PROFILE 5: teacher_meera — Burnout → sabbatical → thriving (POSITIVE ARC)
+# =====================================================================
+TEACHER_ENTRIES = [
+    # Jan 15-31: Burnout and frustration (10)
+    ("2026-01-15", "Another day of 45 kids in one classroom. No teaching assistant. I can barely hear myself think."),
+    ("2026-01-17", "Parent complained that I'm not giving enough homework. I'm drowning and they want MORE from me."),
+    ("2026-01-19", "Spent my Sunday grading 90 papers. No weekend. No personal time. I haven't read a book for myself in months."),
+    ("2026-01-21", "Three kids got into a fight in my class. I broke it up but my hands were shaking afterwards. This isn't what I signed up for."),
+    ("2026-01-23", "Faculty meeting was pointless. Same complaints, no solutions. Administration doesn't care about teacher wellbeing."),
+    ("2026-01-25", "I love teaching but I hate this job. That sentence doesn't make sense but it's exactly how I feel."),
+    ("2026-01-27", "Cried in the staff bathroom during lunch break. A colleague found me. She said she feels the same way. We're all burnt out."),
+    ("2026-01-28", "Headaches every afternoon. Can't sleep because I'm planning tomorrow's lessons. This is not sustainable."),
+    ("2026-01-30", "Put in my request for a 2-month sabbatical. Principal was surprised but approved it. Starting February 10."),
+    ("2026-01-31", "Last week of school before sabbatical. Counting down the days. I feel guilty for leaving the kids."),
+
+    # Feb 1-9: Transition, mixed feelings (5)
+    ("2026-02-01", "One more week. Handed off my lesson plans. The substitute seems capable. Still feel guilty."),
+    ("2026-02-03", "Colleague said I'm doing the right thing. You can't pour from an empty cup. I know that intellectually."),
+    ("2026-02-05", "Kids made me a goodbye card. 'Come back soon Miss Meera.' I'm definitely crying. But I need this break."),
+    ("2026-02-07", "Packed a bag. Booked a train to Rishikesh. First time traveling alone. Nervous but excited."),
+    ("2026-02-09", "Last day. Hugged the kids. Walked out of school feeling 10 kilos lighter. The weight is lifting."),
+
+    # Feb 10-28: Sabbatical — healing and discovery (10)
+    ("2026-02-10", "First day of sabbatical. Woke up with no alarm. Made chai slowly. Sat on the balcony. Did nothing. It was beautiful."),
+    ("2026-02-12", "Arrived in Rishikesh. The mountains, the Ganga. For the first time in months my mind is quiet."),
+    ("2026-02-14", "Morning yoga by the river. I remembered that my body exists for more than just standing in front of a classroom."),
+    ("2026-02-16", "Started journaling with pen and paper. Writing about why I became a teacher. The original spark."),
+    ("2026-02-18", "Met a retired teacher at a cafe. She taught for 35 years. She said burnout is not failure — its a signal you care too much without boundaries."),
+    ("2026-02-20", "Read two books this week. TWO. I haven't read for pleasure in over a year. My brain feels alive again."),
+    ("2026-02-22", "Did a silent meditation retreat for 3 days. No phone. No planning. Just being. Life-changing."),
+    ("2026-02-24", "Started sketching again. Something I loved in college. My hands remember even when my mind forgot."),
+    ("2026-02-26", "Feeling genuinely rested for the first time in years. Sleep is deep. Dreams are vivid. Body feels lighter."),
+    ("2026-02-28", "COPING: What helped me recover from teaching burnout — taking a real break, not just a weekend. Traveling alone, yoga, journaling about why I started teaching. Rediscovering hobbies I abandoned. Setting a firm boundary that weekends are mine."),
+
+    # Mar 1-31: Returning with new approach — thriving (12)
+    ("2026-03-01", "Back home. Feeling nervous about returning to school but also... ready. I have a plan."),
+    ("2026-03-03", "First day back. Told the principal I need a teaching assistant or I reduce my class load. She agreed. Boundaries work."),
+    ("2026-03-05", "New rule: no grading on weekends. Period. I batch everything into two weekday evenings. It's working."),
+    ("2026-03-08", "The kids were so happy to see me. One boy said 'You look different Miss.' I am different."),
+    ("2026-03-10", "Tried a new teaching method — student-led discussions instead of lectures. Less work for me, more learning for them. Win-win."),
+    ("2026-03-13", "Started a teacher support group at school. Five of us meet every Thursday for 30 minutes. Just to talk."),
+    ("2026-03-15", "Weekend was genuinely restful. Painted, cooked, walked in the park. No guilt. This is how it should be."),
+    ("2026-03-18", "Got the best feedback from a parent — 'My daughter says your classes are fun now.' That means everything."),
+    ("2026-03-21", "Morning yoga before school has become non-negotiable. 20 minutes that change the entire day."),
+    ("2026-03-24", "Colleague asked how I changed. Told her about the sabbatical and boundaries. She's considering the same."),
+    ("2026-03-27", "Sleeping 8 hours. Eating well. Reading every night. Teaching feels like a calling again, not a burden."),
+    ("2026-03-31", "Best month of my career. Not because of results — because I'm sustainable. I can do this for years now."),
+
+    # Apr 1-14: Thriving and growing — POSITIVE ending (8)
+    ("2026-04-01", "New quarter. I have energy for new ideas. Started a creative writing club for the kids. They love it."),
+    ("2026-04-03", "Teacher support group has grown to 12 members. We're making a difference in each other's lives."),
+    ("2026-04-05", "Weekend trip with friends. Laughed until my stomach hurt. I forgot what that felt like."),
+    ("2026-04-07", "Student who was struggling asked to talk after class. I had the patience and energy to really listen. That wouldn't have been possible in January."),
+    ("2026-04-09", "Principal asked me to present at district conference about teacher wellbeing. From breaking down to leading change."),
+    ("2026-04-11", "Painted for 2 hours tonight. Not for anyone, just for me. The joy of creating something with no deadline."),
+    ("2026-04-13", "Grateful today. For the sabbatical. For the kids. For learning that taking care of myself IS taking care of them."),
+    ("2026-04-14", "If January-me could see April-me, she wouldn't believe it. Same job, same school, same kids — completely different person. Boundaries and self-care aren't selfish. They're necessary."),
+]
+
 
 PROFILES = {
     "student_ananya": STUDENT_ENTRIES,
     "parent_rahul": PARENT_ENTRIES,
     "athlete_priya": ATHLETE_ENTRIES,
+    "teacher_meera": TEACHER_ENTRIES,
 }
 
 
