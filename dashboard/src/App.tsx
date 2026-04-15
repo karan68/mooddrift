@@ -5,6 +5,7 @@ import ScatterPlot from "./components/ScatterPlot";
 import DriftTimeline from "./components/DriftTimeline";
 import EntryList from "./components/EntryList";
 import Settings from "./components/Settings";
+import TherapistReport from "./components/TherapistReport";
 import { USER_PROFILES, setCurrentUser, getCurrentUser } from "./utils/api";
 import "./App.css";
 
@@ -85,6 +86,7 @@ function App() {
 
         {tab === "settings" && (
           <div className="tab-content">
+            <TherapistReport />
             <Settings />
             <footer className="disclaimer">
               MoodDrift is an emotional self-awareness tool. It is <strong>not</strong> a medical device,

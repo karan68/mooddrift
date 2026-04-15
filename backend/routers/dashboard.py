@@ -15,7 +15,7 @@ import numpy as np
 from fastapi import APIRouter, Query
 
 from config import settings
-from services.qdrant_service import scroll_entries, delete_entries
+from services.qdrant_service import scroll_entries, delete_entries, search_coping_strategies
 from services.drift_engine import (
     compute_centroid,
     cosine_similarity,
@@ -197,3 +197,103 @@ def clear_entries(user_id: str = Query(default=None)):
     uid = user_id or settings.default_user_id
     count = delete_entries(uid)
     return {"status": "cleared", "deleted": count}
+
+
+@router.get("/api/report")
+def get_therapist_report(
+    user_id: str = Query(default=None),
+    days: int = Query(default=14),
+):
+    """Generate a structured therapist report for the last N days.
+
+    Returns: summary stats, sentiment trend, key entries, drift status,
+    coping strategies — everything a therapist needs in one JSON.
+    """
+    uid = user_id or settings.default_user_id
+    now = datetime.now(timezone.utc)
+    date_from = int((now - timedelta(days=days)).timestamp())
+
+    entries = scroll_entries(user_id=uid, date_from=date_from, limit=200)
+
+    if not entries:
+        return {"error": "No entries found for this period."}
+
+    # 1. Basic stats
+    sentiments = [e.payload.get("sentiment_score", 0) for e in entries]
+    avg_sentiment = sum(sentiments) / len(sentiments)
+    min_sentiment = min(sentiments)
+    max_sentiment = max(sentiments)
+
+    # 2. Sentiment trend by day
+    daily_sentiment: dict[str, list[float]] = defaultdict(list)
+    for e in entries:
+        date = e.payload.get("date", "")
+        daily_sentiment[date].append(e.payload.get("sentiment_score", 0))
+
+    sentiment_trend = [
+        {"date": d, "avg_sentiment": round(sum(scores) / len(scores), 3), "entries": len(scores)}
+        for d, scores in sorted(daily_sentiment.items())
+    ]
+
+    # 3. Top keywords
+    from collections import Counter as Ctr
+    all_kw: list[str] = []
+    for e in entries:
+        all_kw.extend(e.payload.get("keywords", []))
+    kw_counts = Ctr(all_kw)
+    top_keywords = [{"word": w, "count": c} for w, c in kw_counts.most_common(10)]
+
+    # 4. Key entries: most negative, most positive, most recent
+    sorted_by_sentiment = sorted(entries, key=lambda e: e.payload.get("sentiment_score", 0))
+
+    most_negative = []
+    for e in sorted_by_sentiment[:3]:
+        most_negative.append({
+            "date": e.payload.get("date"),
+            "transcript": e.payload.get("transcript", ""),
+            "sentiment": e.payload.get("sentiment_score"),
+        })
+
+    most_positive = []
+    for e in sorted_by_sentiment[-3:]:
+        most_positive.append({
+            "date": e.payload.get("date"),
+            "transcript": e.payload.get("transcript", ""),
+            "sentiment": e.payload.get("sentiment_score"),
+        })
+
+    # 5. Drift status
+    drift = detect_drift(uid)
+
+    # 6. Coping strategies
+    coping_entries = search_coping_strategies(user_id=uid, limit=5)
+    coping = [
+        {"date": e.payload.get("date"), "strategy": e.payload.get("transcript", "")}
+        for e in coping_entries
+    ]
+
+    return {
+        "user_id": uid,
+        "period_days": days,
+        "generated_at": now.strftime("%Y-%m-%d %H:%M UTC"),
+        "summary": {
+            "total_entries": len(entries),
+            "avg_sentiment": round(avg_sentiment, 3),
+            "min_sentiment": round(min_sentiment, 3),
+            "max_sentiment": round(max_sentiment, 3),
+            "days_with_entries": len(daily_sentiment),
+        },
+        "sentiment_trend": sentiment_trend,
+        "top_keywords": top_keywords,
+        "key_entries": {
+            "most_negative": most_negative,
+            "most_positive": most_positive,
+        },
+        "drift": {
+            "detected": drift.get("detected", False),
+            "severity": drift.get("severity", "none"),
+            "message": drift.get("message", ""),
+            "matching_period": drift.get("matching_period"),
+        },
+        "coping_strategies": coping,
+    }

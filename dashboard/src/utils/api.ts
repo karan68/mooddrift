@@ -101,3 +101,8 @@ export async function fetchDriftCurrent(): Promise<DriftCurrent> {
   const res = await fetch(`${API_BASE}/api/drift-current?user_id=${_currentUser}`);
   return await res.json();
 }
+
+export async function fetchReport(days = 14): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/report?user_id=${_currentUser}&days=${days}`);
+  return await res.json();
+}
