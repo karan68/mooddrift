@@ -164,7 +164,7 @@ def _format_response(result: dict, chat_id: int | None = None) -> str:
 
 
 def _generate_weekly_recap(user_id: str) -> str:
-    """Generate a weekly recap text for a user."""
+    """Generate a weekly recap using Groq LLM for natural, warm language."""
     now = datetime.now(timezone.utc)
     week_ago = int((now - timedelta(days=7)).timestamp())
     entries = scroll_entries(user_id=user_id, date_from=week_ago, limit=50)
@@ -172,6 +172,7 @@ def _generate_weekly_recap(user_id: str) -> str:
     if not entries:
         return "You didn't check in this week. No worries — I'll be here when you're ready."
 
+    # Gather data for the LLM prompt
     entry_count = len(entries)
     sentiments = [e.payload.get("sentiment_score", 0) for e in entries]
     avg_sentiment = sum(sentiments) / len(sentiments)
@@ -180,30 +181,48 @@ def _generate_weekly_recap(user_id: str) -> str:
     for e in entries:
         all_keywords.extend(e.payload.get("keywords", []))
     keyword_counts = Counter(all_keywords)
-    top_keywords = [kw for kw, _ in keyword_counts.most_common(3)]
+    top_keywords = [kw for kw, count in keyword_counts.most_common(5) if count >= 2]
+
+    # Get sample transcripts (most negative + most positive)
+    sorted_entries = sorted(entries, key=lambda e: e.payload.get("sentiment_score", 0))
+    sample_negative = sorted_entries[0].payload.get("transcript", "")[:100] if sentiments else ""
+    sample_positive = sorted_entries[-1].payload.get("transcript", "")[:100] if sentiments else ""
 
     drift = detect_drift(user_id)
+    coping = drift.get("coping_strategies")
 
-    parts = [f"Here's your weekly reflection."]
-    parts.append(f"You checked in {entry_count} times this week.")
+    # Build structured prompt for Groq LLM
+    prompt = f"""Generate a warm, personal weekly reflection for a journal app user.
 
-    if avg_sentiment > 0.2:
-        parts.append("Your overall mood was positive.")
-    elif avg_sentiment > -0.2:
-        parts.append("Your overall mood was mixed.")
-    else:
-        parts.append("Your overall mood was lower than usual this week.")
+Data from their week:
+- Check-ins: {entry_count}
+- Average mood: {"positive" if avg_sentiment > 0.2 else "mixed" if avg_sentiment > -0.2 else "lower than usual"} ({avg_sentiment:.2f})
+- Recurring themes: {', '.join(top_keywords) if top_keywords else 'varied topics'}
+- Most difficult moment: "{sample_negative}"
+- Best moment: "{sample_positive}"
+- Drift status: {"detected — " + drift['severity'] + " level" if drift.get('detected') else "stable, no drift"}
+- Matching past period: {drift.get('matching_period') or 'none'}
+- What helped last time: {coping[0][:100] if coping else 'no coping strategies recorded yet'}
 
-    if top_keywords:
-        parts.append(f"You mentioned {', '.join(top_keywords)} most often.")
+Write a 3-4 sentence voice note script. Start with "Here's your weekly reflection." Be warm and specific. End with encouragement. Do NOT use clinical language or emojis."""
 
-    if drift["detected"]:
-        parts.append(f"Your entries are showing {drift['severity']} drift. {drift['message']}")
-    else:
-        parts.append("Your patterns look consistent. Keep up the practice.")
-
-    parts.append("Take care of yourself.")
-    return " ".join(parts)
+    try:
+        from services.llm_summary import generate_summary
+        return generate_summary(prompt)
+    except Exception as e:
+        print(f"[telegram] LLM recap error, falling back to template: {e}")
+        # Fallback to simple template if LLM fails
+        parts = [f"Here's your weekly reflection. You checked in {entry_count} times."]
+        if avg_sentiment > 0.2:
+            parts.append("Overall your mood was positive this week.")
+        elif avg_sentiment < -0.2:
+            parts.append("It seems like a tougher week than usual.")
+        else:
+            parts.append("Your mood was mixed this week.")
+        if drift.get("detected"):
+            parts.append(drift["message"])
+        parts.append("Take care of yourself.")
+        return " ".join(parts)
 
 
 # === Background processing functions ===
