@@ -1,13 +1,18 @@
 import nltk
 
-nltk.download("vader_lexicon", quiet=True)
+_analyzer = None
 
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-_analyzer = SentimentIntensityAnalyzer()
+def _get_analyzer():
+    global _analyzer
+    if _analyzer is None:
+        nltk.download("vader_lexicon", quiet=True)
+        from nltk.sentiment.vader import SentimentIntensityAnalyzer
+        _analyzer = SentimentIntensityAnalyzer()
+    return _analyzer
 
 
 def analyze_sentiment(text: str) -> float:
     """Return VADER compound score in range -1.0 to 1.0."""
-    scores = _analyzer.polarity_scores(text)
+    scores = _get_analyzer().polarity_scores(text)
     return scores["compound"]
