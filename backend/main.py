@@ -11,7 +11,9 @@ from routers.dashboard import router as dashboard_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_collection()
+    # Defer collection creation to avoid blocking port binding on Render
+    import threading
+    threading.Thread(target=create_collection, daemon=True).start()
     yield
 
 
