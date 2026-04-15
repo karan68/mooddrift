@@ -8,3 +8,4 @@ python-dotenv
 httpx
 umap-learn
 scikit-learn
+edge-tts
