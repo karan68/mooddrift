@@ -2,10 +2,10 @@ import { useEntries, useDriftCurrent } from "../hooks/useEntries";
 
 function severityBadge(severity: string) {
   const colors: Record<string, { bg: string; text: string }> = {
-    none: { bg: "#166534", text: "#86efac" },
-    mild: { bg: "#854d0e", text: "#fde047" },
-    moderate: { bg: "#9a3412", text: "#fdba74" },
-    significant: { bg: "#991b1b", text: "#fca5a5" },
+    none: { bg: "#ecfdf5", text: "#059669" },
+    mild: { bg: "#fef3c7", text: "#b45309" },
+    moderate: { bg: "#ffedd5", text: "#c2410c" },
+    significant: { bg: "#fef2f2", text: "#dc2626" },
   };
   const c = colors[severity] || colors.none;
   return (
