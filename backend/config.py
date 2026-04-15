@@ -27,5 +27,8 @@ class Settings(BaseSettings):
     embedding_dim: int = 384
     collection_name: str = "mood_entries"
 
+    # Telegram
+    telegram_bot_token: Optional[str] = None
+
 
 settings = Settings()

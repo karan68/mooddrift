@@ -4,6 +4,7 @@ import InsightCard from "./components/InsightCard";
 import ScatterPlot from "./components/ScatterPlot";
 import DriftTimeline from "./components/DriftTimeline";
 import EntryList from "./components/EntryList";
+import Settings from "./components/Settings";
 import { USER_PROFILES, setCurrentUser, getCurrentUser } from "./utils/api";
 import "./App.css";
 
@@ -72,6 +73,11 @@ function App() {
           <DriftTimeline />
         </section>
       )}
+
+      {/* === Settings === */}
+      <section className="settings-section">
+        <Settings />
+      </section>
 
       {/* === Disclaimer === */}
       <footer className="disclaimer">
