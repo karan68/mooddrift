@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Vapi
     vapi_api_key: Optional[str] = None
     vapi_public_key: Optional[str] = None
+    vapi_assistant_id: Optional[str] = None
 
     # App
     default_user_id: str = "demo_user"
