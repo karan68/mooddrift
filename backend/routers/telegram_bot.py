@@ -346,15 +346,42 @@ async def telegram_webhook(request: Request):
 
     # /start — respond inline (fast, no processing needed)
     if text.startswith("/start"):
+        _user_registry[chat_id]["first_name"] = message.get("from", {}).get("first_name", "")
         _send_message_sync(
             chat_id,
             "🌊 *Welcome to MoodDrift!*\n\n"
             "🎤 *Send a voice note* — tell me how you're feeling\n"
             "✍️ *Send text* — type your thoughts\n"
             "📊 /status — current drift\n"
-            "📅 /recap — weekly summary\n\n"
+            "📅 /recap — weekly summary\n"
+            "🤝 /trust @username — set trusted contact\n"
+            "❌ /untrust — remove trusted contact\n\n"
             "_How are you feeling today?_"
         )
+        return {"ok": True}
+
+    # /trust — set trusted contact
+    if text.startswith("/trust"):
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            _send_message_sync(chat_id, "Usage: /trust @username or /trust 9876543210")
+        else:
+            contact = parts[1].strip()
+            _set_trusted_contact(chat_id, contact)
+            _send_message_sync(
+                chat_id,
+                f"✅ Trusted contact set to *{contact}*.\n\n"
+                f"If your emotional drift stays high for several days, "
+                f"we'll send them a gentle heads-up. "
+                f"We will *never* share your journal entries — only that you might need support.\n\n"
+                f"Use /untrust to remove anytime."
+            )
+        return {"ok": True}
+
+    # /untrust — remove trusted contact
+    if text.startswith("/untrust"):
+        _remove_trusted_contact(chat_id)
+        _send_message_sync(chat_id, "✅ Trusted contact removed. No one will be notified.")
         return {"ok": True}
 
     # Everything else → background thread
@@ -408,3 +435,99 @@ async def send_weekly_recap():
             print(f"[telegram] weekly recap error for {chat_id}: {e}")
 
     return {"sent": sent, "total_users": len(_user_registry)}
+
+
+# === P2: Trusted Contact Alerts ===
+
+def _set_trusted_contact(chat_id: int, contact: str):
+    """Set a trusted contact for a user."""
+    if chat_id in _user_registry:
+        _user_registry[chat_id]["trusted_contact"] = contact
+        _user_registry[chat_id]["trusted_enabled"] = True
+
+
+def _remove_trusted_contact(chat_id: int):
+    """Remove trusted contact for a user."""
+    if chat_id in _user_registry:
+        _user_registry[chat_id].pop("trusted_contact", None)
+        _user_registry[chat_id]["trusted_enabled"] = False
+
+
+@router.post("/telegram/check-trusted-alerts")
+async def check_trusted_alerts():
+    """P2: Check all users for sustained high drift and alert trusted contacts.
+
+    Call via cron (e.g. daily). Only alerts if:
+    - User has opted in with a trusted contact
+    - Drift score >= 0.5
+    """
+    alerted = 0
+    for chat_id, info in _user_registry.items():
+        if not info.get("trusted_enabled") or not info.get("trusted_contact"):
+            continue
+
+        user_id = info["user_id"]
+        drift = detect_drift(user_id)
+
+        if drift.get("detected") and drift.get("drift_score", 0) >= 0.5:
+            contact = info["trusted_contact"]
+            user_name = info.get("first_name", "Someone you care about")
+
+            alert_msg = (
+                f"Hi — {user_name} has given you permission to receive this message. "
+                f"Their recent journal entries suggest they may be going through a "
+                f"difficult time. You might want to check in with them. "
+                f"No entry content is shared — only that a pattern was noticed. "
+                f"— MoodDrift"
+            )
+
+            try:
+                contact_id = int(contact)
+                _send_message_sync(contact_id, alert_msg)
+            except ValueError:
+                _send_message_sync(
+                    chat_id,
+                    f"⚠️ Your drift has been elevated. "
+                    f"We'd like to notify your trusted contact ({contact}), "
+                    f"but we can only auto-send to Telegram users. "
+                    f"Please reach out to them yourself, or share this:\n\n_{alert_msg}_"
+                )
+
+            alerted += 1
+
+    return {"alerted": alerted}
+
+
+# === P2: Consistency Acknowledgment ===
+
+@router.post("/telegram/check-consistency")
+async def check_consistency():
+    """P2: Acknowledge journaling consistency milestones.
+
+    Call via daily cron. Checks 7, 14, 30 day milestones.
+    No gamification — encouragement only.
+    """
+    milestones = [
+        (30, "You've been journaling for a month. That takes real commitment. Patterns become much clearer with this much data. Keep going."),
+        (14, "Two weeks of checking in. You're building a real picture of your emotional patterns. That self-awareness is powerful."),
+        (7, "One week of journaling. You've taken the first step toward understanding your patterns. That matters."),
+    ]
+
+    acknowledged = 0
+    for chat_id, info in _user_registry.items():
+        user_id = info["user_id"]
+        already_acked = info.get("last_consistency_milestone", 0)
+
+        now = datetime.now(timezone.utc)
+        for days, message in milestones:
+            if days <= already_acked:
+                continue
+            date_from = int((now - timedelta(days=days)).timestamp())
+            entries = scroll_entries(user_id=user_id, date_from=date_from, limit=200)
+            if len(entries) >= days:
+                _send_message_sync(chat_id, f"🌟 {message}")
+                info["last_consistency_milestone"] = days
+                acknowledged += 1
+                break
+
+    return {"acknowledged": acknowledged}
