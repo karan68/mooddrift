@@ -4,40 +4,63 @@
 
 ---
 
-## The Problem Nobody Talks About
+## It Started with Rohan
 
-Here's a number that should bother you: **85%**.
+Rohan is one of my closest friends. Software engineer, sharp mind, always the one cracking jokes in the group chat. The kind of guy you'd never think was struggling.
 
-That's the dropout rate for journaling apps within two weeks. Eighty-five percent. The very tool that therapists, researchers, and wellness gurus swear by — "just write down how you feel!" — fails almost everyone who tries it.
+Last October, he told us he'd been seeing a psychiatrist for three months. None of us knew. He said the hardest part wasn't the sessions themselves — it was everything *between* them. Two weeks between appointments. By the time he sat down with his doctor, he'd forgotten half of what happened. The bad days blurred together. The good days felt like they didn't count.
 
-We asked ourselves: *why?*
+His psychiatrist suggested journaling. "Write down how you feel every day. It'll help you spot patterns."
 
-The answers were painfully obvious once we stopped to listen:
+Rohan downloaded Daylio. Rated his mood with emojis for four days. Then forgot. Downloaded Reflectly. Typed two entries. Stopped. He tried three more apps. Same story every time.
 
-- **Typing is friction.** When you're overwhelmed, the last thing you want to do is stare at a blank text box and compose your feelings into sentences.
-- **Nobody reads their own patterns.** You don't notice you're drifting into burnout until you're already burned out. The journal has the data — but no one's analyzing it.
-- **Accessibility is an afterthought.** People with low literacy, motor disabilities, or simply those who think better out loud? Excluded entirely.
+*"I'd open it, see the blank page, and just… close it. I didn't have the energy to type out my feelings. And even when I did, I'd never go back and read them. What's the point of a journal nobody reads?"*
 
-We wanted to build something different. Not another app that asks you to rate your day with a smiley face. Something that actually *listens*.
+That conversation stuck with me. Because Rohan isn't lazy. He's exhausted. And the tools designed to help him were failing because they demanded effort from someone who had none to give.
+
+Then the hackathon theme dropped: **Voice AI for Accessibility & Societal Impact.**
+
+And I thought: *what if Rohan's journal could just listen?*
 
 ---
 
-## The Idea: What If Your Journal Could Talk?
+## 85% Drop Out. We Wanted to Know Why.
 
-MoodDrift is built on a simple but powerful premise:
+Rohan wasn't alone. The data confirmed what he told us over chai:
 
-> **Your words carry more meaning than any emoji slider.**
+- **85% of people quit journaling apps within 2 weeks.** The friction of typing kills it.
+- **450 million people** worldwide have mental health conditions (WHO). Journaling is clinically proven to help — but only if you actually do it.
+- **Nobody reads their own patterns.** You don't notice you're drifting into burnout until you're already burned out. The journal has the data — but no one's analyzing it.
+- **Accessibility is an afterthought.** People with low literacy, motor disabilities, cognitive overload, or those who simply think better out loud? Excluded entirely.
+
+We kept coming back to what Rohan said: *"I didn't have the energy to type."*
+
+So we asked a different question: **What if you didn't have to?**
+
+What if you could just *talk* — for two minutes, into your phone, while walking home — and your journal not only recorded it, but understood it, remembered it, and one day said:
+
+> *"Hey, your entries this week sound a lot like mid-October, when you described feeling burnt out. Last time, you said taking a weekend completely offline helped. Would that work for you right now?"*
+
+That's MoodDrift.
+
+We built it for Rohan. And for everyone like him.
 
 When you say "I can barely sleep, deadlines are crushing me, and I snapped at my colleague today" — that sentence contains a rich semantic fingerprint. It's not a 3/5. It's not a 😐. It's a vector in 384-dimensional space that can be compared, clustered, and tracked over time.
 
-What if we could:
-1. Let you **speak** instead of type — 2 minutes via voice note on Telegram
-2. **Embed** your words as vectors and store them with timestamps
-3. **Compare** this week's emotional centroid against your baseline
-4. **Detect** when you're drifting — before you notice it yourself
-5. **Remember** what helped last time and surface it exactly when you need it
+## How It Actually Works (The Part Rohan Would Ask About)
 
-That's MoodDrift.
+When Rohan sends a voice note to @MoodDriftBot on Telegram saying *"I can barely sleep, deadlines are crushing me"* — here's what happens under the hood in about 5 seconds:
+
+1. **Groq Whisper** transcribes the audio
+2. **sentence-transformers** converts his words into a 384-dimensional vector — a semantic fingerprint of how he feels
+3. **VADER + our context corrections** score the sentiment (and yes, "can't sleep" is correctly negative — we'll get to that story later)
+4. The vector + metadata lands in **Qdrant** with a timestamp
+5. The **drift engine** compares this week's centroid against his baseline
+6. If drift is detected, it searches for **what helped last time** and surfaces it
+
+Rohan gets back: *"I noticed a shift in your recent entries. This feels similar to mid-October. Last time, taking a weekend offline helped — would that work for you right now?"*
+
+He didn't type a word. He didn't open a dashboard. He talked into his phone for 30 seconds while making chai.
 
 ---
 
@@ -302,11 +325,23 @@ MoodDrift today is an MVP. Here's what makes it a product:
 
 ---
 
-## The Team
+## Back to Rohan
 
-Built in 48 hours at BL-Hack 2026, Bangalore.
+I showed him MoodDrift last night.
 
-Not because we had to. Because 450 million people with mental health conditions deserve a journal that actually works for them.
+He sent a voice note while sitting on his couch: *"Work was okay today, but I've been feeling this low-level dread all week. Like something's off but I can't name it."*
+
+Five seconds later, the bot replied with his themes, his sentiment, and noted that his entries this week felt different from his baseline.
+
+He stared at his phone. Then he said something I didn't expect:
+
+*"This is the first time an app noticed something about me that I didn't notice myself."*
+
+He sent three more voice notes that night.
+
+His psychiatrist appointment is next Tuesday. For the first time, he's going to walk in with a [therapist report](https://github.com/karan68/mooddrift) — sentiment trends, key entries, coping strategies — generated from his own words. No more forgetting. No more blurred-together weeks.
+
+That's why we built MoodDrift. Not for a hackathon. For Rohan. For the 450 million people like him who deserve a journal that doesn't give up on them when they can't give to it.
 
 *MoodDrift doesn't diagnose. It mirrors. It's your journal that listens, remembers, and notices what you don't.*
 
