@@ -86,8 +86,18 @@ def _generate_voice_insight(drift: dict) -> bytes | None:
         return None
 
 
-def _process_entry(user_id: str, transcript: str, entry_type: str = "checkin") -> dict:
-    """Process a journal entry: embed, analyze, store, drift check."""
+def _process_entry(
+    user_id: str,
+    transcript: str,
+    entry_type: str = "checkin",
+    biomarkers: dict | None = None,
+) -> dict:
+    """Process a journal entry: embed, analyze, store, drift check.
+
+    If `biomarkers` is provided (voice-note entries only), it's merged into the
+    Qdrant payload and incongruence detection is run against the user's
+    personal vocal baseline.
+    """
     from services.embedding import generate_embedding
     from services.sentiment import analyze_sentiment
     from services.keywords import extract_keywords
@@ -110,6 +120,28 @@ def _process_entry(user_id: str, transcript: str, entry_type: str = "checkin") -
         "entry_type": entry_type,
     }
 
+    # === Voice biomarkers (optional) ===
+    congruence = None
+    if biomarkers:
+        # Compute personal baseline BEFORE storing this new entry, so the new
+        # one isn't included in its own baseline.
+        from services.voice_biomarkers import (
+            compute_user_baseline,
+            analyze_congruence,
+        )
+        baseline = compute_user_baseline(user_id)
+        congruence = analyze_congruence(biomarkers, sentiment, baseline)
+
+        # Merge biomarker fields into payload (None values skipped).
+        for key in (
+            "pitch_mean", "pitch_std", "speech_rate", "pause_ratio",
+            "energy_mean", "jitter", "vocal_stress_score", "audio_duration",
+        ):
+            if biomarkers.get(key) is not None:
+                payload[key] = biomarkers[key]
+        payload["text_voice_congruence"] = congruence["congruence_score"]
+        payload["voice_incongruent"] = congruence["incongruent"]
+
     point_id = upsert_entry(vector, payload)
     drift_result = detect_drift(user_id)
 
@@ -118,18 +150,24 @@ def _process_entry(user_id: str, transcript: str, entry_type: str = "checkin") -
         "sentiment": sentiment,
         "keywords": keywords,
         "drift": drift_result,
+        "biomarkers": biomarkers,
+        "congruence": congruence,
     }
 
 
 # Track users who were asked "what helped?" — awaiting coping response
 _awaiting_coping: set[int] = set()
 
+# Track users who were prompted to record a time capsule
+_awaiting_capsule: set[int] = set()
 
-def _format_response(result: dict, chat_id: int | None = None) -> str:
+
+def _format_response(result: dict, chat_id: int | None = None, user_id: str | None = None) -> str:
     """Format the processing result into a user-friendly text reply."""
     sentiment = result["sentiment"]
     keywords = result["keywords"]
     drift = result["drift"]
+    congruence = result.get("congruence")
 
     if sentiment > 0.3:
         mood = "😊"
@@ -143,6 +181,18 @@ def _format_response(result: dict, chat_id: int | None = None) -> str:
     lines = [f"{mood} *Entry stored.*"]
     if keywords:
         lines.append(f"Themes: {', '.join(keywords[:3])}")
+
+    # === Agent memory: context-aware follow-up ===
+    if user_id:
+        try:
+            from services.agent_memory import build_agent_context, format_context_for_telegram
+            context = build_agent_context(user_id)
+            memory_line = format_context_for_telegram(context, sentiment)
+            if memory_line:
+                lines.append(f"\n{memory_line}")
+        except Exception as e:
+            print(f"[telegram] agent memory error: {e}")
+
     if drift["skipped"]:
         lines.append(f"\n_{drift['message']}_")
     elif drift["detected"]:
@@ -150,6 +200,12 @@ def _format_response(result: dict, chat_id: int | None = None) -> str:
         lines.append(drift["message"])
     else:
         lines.append(f"\n✦ {drift['message']}")
+
+    # === Voice-text incongruence (X-factor signal) ===
+    # When the text and voice tell different stories, surface it gently.
+    if congruence and congruence.get("incongruent") and congruence.get("message"):
+        lines.append(f"\n🎙️ *Voice check-in*")
+        lines.append(congruence["message"])
 
     # If sentiment is positive and recent drift was detected, ask what helped
     if sentiment > 0.2 and not drift.get("skipped") and chat_id is not None:
@@ -227,11 +283,58 @@ Write a 3-4 sentence voice note script. Start with "Here's your weekly reflectio
 
 # === Background processing functions ===
 
+def _check_capsule_and_drift(chat_id: int, user_id: str, result: dict, audio_bytes: bytes | None = None):
+    """After processing an entry, handle capsule prompting + drift playback."""
+    drift = result["drift"]
+
+    # === On drift: play back a time capsule if one exists ===
+    if drift["detected"]:
+        voice = _generate_voice_insight(drift)
+        if voice:
+            _send_voice_sync(chat_id, voice)
+        try:
+            from services.time_capsule import get_capsule_for_playback, get_capsule_audio_path
+            capsule = get_capsule_for_playback(user_id)
+            if capsule:
+                _send_message_sync(
+                    chat_id,
+                    f"💊 *A message from you on {capsule['date']}*\n"
+                    f"You recorded this when you were feeling good:\n\n"
+                    f"_\"{capsule['transcript'][:300]}\"_"
+                )
+                if capsule.get("audio_filename"):
+                    path = get_capsule_audio_path(capsule["audio_filename"])
+                    if path:
+                        _send_voice_sync(chat_id, path.read_bytes())
+        except Exception as e:
+            print(f"[telegram] capsule playback error: {e}")
+        return
+
+    # === On positive streak: prompt capsule recording ===
+    if result["sentiment"] > 0.3 and not drift.get("skipped"):
+        try:
+            from services.time_capsule import check_capsule_ready
+            readiness = check_capsule_ready(user_id)
+            if readiness["ready"]:
+                _send_message_sync(
+                    chat_id,
+                    f"🌟 *{readiness['streak']} good days in a row!*\n\n"
+                    "Want to record a message to your future self? "
+                    "Something you'd want to hear on a tough day.\n\n"
+                    "_Send a voice note or text and I'll save it as a "
+                    "time capsule for you._ 💛"
+                )
+                _awaiting_capsule.add(chat_id)
+        except Exception as e:
+            print(f"[telegram] capsule readiness check error: {e}")
+
+
 def _handle_voice_bg(chat_id: int, user_id: str, file_id: str):
     """Process voice note in background thread."""
     try:
         _send_message_sync(chat_id, "🎧 _Listening..._")
         from services.transcription import transcribe_audio
+        from services.voice_biomarkers import extract_biomarkers
 
         audio_bytes = _download_file_sync(file_id)
         transcript = transcribe_audio(audio_bytes)
@@ -240,13 +343,41 @@ def _handle_voice_bg(chat_id: int, user_id: str, file_id: str):
             _send_message_sync(chat_id, "I couldn't make out what you said. Try again?")
             return
 
-        result = _process_entry(user_id, transcript)
-        _send_message_sync(chat_id, _format_response(result, chat_id))
+        # Check if user was prompted to record a time capsule
+        if chat_id in _awaiting_capsule:
+            _awaiting_capsule.discard(chat_id)
+            try:
+                from services.time_capsule import save_capsule_audio, store_capsule
+                from services.embedding import generate_embedding
+                from services.sentiment import analyze_sentiment
 
-        if result["drift"]["detected"]:
-            voice = _generate_voice_insight(result["drift"])
-            if voice:
-                _send_voice_sync(chat_id, voice)
+                audio_filename = save_capsule_audio(audio_bytes, extension="ogg")
+                sentiment = analyze_sentiment(transcript)
+                vector = generate_embedding(transcript)
+                store_capsule(user_id, transcript, audio_filename, sentiment, vector)
+                _send_message_sync(
+                    chat_id,
+                    "💛 *Time capsule saved.*\n\n"
+                    "I'll play this back if you ever need to hear it. "
+                    "Your future self will thank you."
+                )
+                return
+            except Exception as e:
+                print(f"[telegram] capsule save error: {e}")
+                # Fall through to normal processing
+
+        # Extract acoustic biomarkers from the same audio bytes.
+        # Returns None if librosa/ffmpeg can't decode — pipeline still proceeds.
+        try:
+            biomarkers = extract_biomarkers(audio_bytes, transcript=transcript)
+        except Exception as bm_err:
+            print(f"[telegram] biomarker extraction error: {bm_err}")
+            biomarkers = None
+
+        result = _process_entry(user_id, transcript, biomarkers=biomarkers)
+        _send_message_sync(chat_id, _format_response(result, chat_id, user_id))
+
+        _check_capsule_and_drift(chat_id, user_id, result, audio_bytes)
     except Exception as e:
         _send_message_sync(chat_id, "Sorry, something went wrong. Try again?")
         print(f"[telegram] voice bg error: {e}")
@@ -266,13 +397,30 @@ def _handle_text_bg(chat_id: int, user_id: str, text: str):
             )
             return
 
-        result = _process_entry(user_id, text)
-        _send_message_sync(chat_id, _format_response(result, chat_id))
+        # Check if user was prompted to record a time capsule (text version)
+        if chat_id in _awaiting_capsule:
+            _awaiting_capsule.discard(chat_id)
+            try:
+                from services.time_capsule import store_capsule
+                from services.embedding import generate_embedding
+                from services.sentiment import analyze_sentiment
 
-        if result["drift"]["detected"]:
-            voice = _generate_voice_insight(result["drift"])
-            if voice:
-                _send_voice_sync(chat_id, voice)
+                sentiment = analyze_sentiment(text)
+                vector = generate_embedding(text)
+                store_capsule(user_id, text, None, sentiment, vector)
+                _send_message_sync(
+                    chat_id,
+                    "💛 *Time capsule saved.*\n\n"
+                    "I'll play this back if you ever need to hear it."
+                )
+                return
+            except Exception as e:
+                print(f"[telegram] text capsule save error: {e}")
+
+        result = _process_entry(user_id, text)
+        _send_message_sync(chat_id, _format_response(result, chat_id, user_id))
+
+        _check_capsule_and_drift(chat_id, user_id, result)
     except Exception as e:
         _send_message_sync(chat_id, "Sorry, something went wrong. Try again?")
         print(f"[telegram] text bg error: {e}")

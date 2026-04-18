@@ -160,3 +160,28 @@ def delete_entries(user_id: str) -> int:
         points_selector=point_ids,
     )
     return len(point_ids)
+
+
+def delete_single_entry(point_id: str) -> bool:
+    """Delete a single entry by its point ID. Returns True if deleted."""
+    try:
+        _client.delete(
+            collection_name=settings.collection_name,
+            points_selector=[point_id],
+        )
+        return True
+    except Exception:
+        return False
+
+
+def update_entry_payload(point_id: str, updates: dict) -> bool:
+    """Update specific payload fields on an existing entry."""
+    try:
+        _client.set_payload(
+            collection_name=settings.collection_name,
+            payload=updates,
+            points=[point_id],
+        )
+        return True
+    except Exception:
+        return False

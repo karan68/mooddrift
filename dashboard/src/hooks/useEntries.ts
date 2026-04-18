@@ -4,11 +4,17 @@ import {
   fetchVisualization,
   fetchDriftTimeline,
   fetchDriftCurrent,
+  fetchVoiceBiomarkers,
+  fetchTimeCapsules,
+  fetchTriggers,
   getCurrentUser,
   type Entry,
   type VisualizationPoint,
   type DriftTimelinePoint,
   type DriftCurrent,
+  type VoiceBiomarkerResponse,
+  type TimeCapsuleListResponse,
+  type TriggerResponse,
 } from "../utils/api";
 
 const POLL_INTERVAL = 10000; // 10 seconds for things that should poll
@@ -73,4 +79,47 @@ export function useDriftCurrent() {
   }, [refresh]);
 
   return { drift, loading };
+}
+
+export function useVoiceBiomarkers(days = 90) {
+  const [data, setData] = useState<VoiceBiomarkerResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // No polling — voice biomarker data only changes when a new voice note arrives.
+  useEffect(() => {
+    setLoading(true);
+    fetchVoiceBiomarkers(days)
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  return { data, loading };
+}
+
+export function useTimeCapsules(days = 180) {
+  const [data, setData] = useState<TimeCapsuleListResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(() => {
+    fetchTimeCapsules(days).then(setData).finally(() => setLoading(false));
+  }, [days]);
+
+  useEffect(() => {
+    setLoading(true);
+    refresh();
+  }, [refresh]);
+
+  return { data, loading, refresh };
+}
+
+export function useTriggers(days = 90) {
+  const [data, setData] = useState<TriggerResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchTriggers(days).then(setData).finally(() => setLoading(false));
+  }, [days]);
+
+  return { data, loading };
 }

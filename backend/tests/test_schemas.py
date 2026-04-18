@@ -66,7 +66,9 @@ class TestMoodEntryPayload:
         }
         payload = MoodEntryPayload(**data)
         dumped = payload.model_dump()
-        assert dumped == data
+        # Compare only the keys we provided; optional biomarker fields default to None
+        for key, value in data.items():
+            assert dumped[key] == value
 
 
 class TestMoodEntryCreate:

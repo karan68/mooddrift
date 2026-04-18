@@ -8,6 +8,7 @@ from routers.vapi_webhook import router as vapi_router
 from routers.entries import router as entries_router
 from routers.dashboard import router as dashboard_router
 from routers.telegram_bot import router as telegram_router
+from routers.time_capsule import router as time_capsule_router
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ app.include_router(vapi_router)
 app.include_router(entries_router)
 app.include_router(dashboard_router)
 app.include_router(telegram_router)
+app.include_router(time_capsule_router)
 
 
 @app.get("/health")

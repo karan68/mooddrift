@@ -43,6 +43,8 @@ def handle_tool_calls(message: dict) -> dict:
             result = _store_and_analyze(params)
         elif name == "search_similar_past_entries":
             result = _search_similar_past(params)
+        elif name == "get_user_context":
+            result = _get_user_context(params)
         else:
             result = json.dumps({"error": f"Unknown function: {name}"})
 
@@ -65,6 +67,8 @@ def handle_function_call(message: dict) -> dict:
         result = _store_and_analyze(params)
     elif name == "search_similar_past_entries":
         result = _search_similar_past(params)
+    elif name == "get_user_context":
+        result = _get_user_context(params)
     else:
         result = json.dumps({"error": f"Unknown function: {name}"})
 
@@ -176,3 +180,16 @@ def _search_similar_past(params: dict) -> str:
         entries.append(f"On {date}: \"{snippet}\"")
 
     return "I found similar past entries:\n" + "\n".join(entries)
+
+
+def _get_user_context(params: dict) -> str:
+    """Load the user's recent journal context for agent memory.
+
+    Returns a natural-language summary that the agent uses to personalize
+    the conversation — referencing past entries, themes, and patterns.
+    """
+    from services.agent_memory import build_agent_context, format_context_for_vapi
+
+    user_id = params.get("user_id", settings.default_user_id)
+    context = build_agent_context(user_id)
+    return format_context_for_vapi(context)

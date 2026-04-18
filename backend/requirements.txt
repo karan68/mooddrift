@@ -9,3 +9,5 @@ httpx
 umap-learn
 scikit-learn
 edge-tts
+librosa
+soundfile

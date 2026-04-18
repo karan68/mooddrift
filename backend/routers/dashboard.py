@@ -25,6 +25,20 @@ from services.drift_engine import (
 router = APIRouter()
 
 
+@router.get("/api/context")
+def get_user_context(
+    user_id: str = Query(default=None),
+):
+    """Get the user's recent context for agent memory injection.
+
+    Returns structured context: last entry, recent themes, sentiment trend,
+    drift status, known triggers, capsule availability.
+    """
+    from services.agent_memory import build_agent_context
+    uid = user_id or settings.default_user_id
+    return build_agent_context(uid)
+
+
 @router.get("/api/entries")
 def get_entries(
     user_id: str = Query(default=None),
@@ -39,6 +53,9 @@ def get_entries(
 
     result = []
     for e in entries:
+        # Hide time capsules from the regular journal view
+        if e.payload.get("entry_type") == "time_capsule":
+            continue
         result.append({
             "id": e.id,
             "date": e.payload.get("date"),
@@ -191,12 +208,107 @@ def seed_data():
     return {"status": "seeded", "entries": 60}
 
 
+@router.get("/api/voice-biomarkers")
+def get_voice_biomarkers(
+    user_id: str = Query(default=None),
+    days: int = Query(default=90),
+):
+    """Voice biomarker time series + personal baseline + incongruence flags.
+
+    Powers the "Voice vs Text" panel in the dashboard. Returns:
+      - timeline: per-entry list of date, text sentiment, vocal stress score,
+        congruence score, and incongruence flag.
+      - baseline: the user's personal vocal baseline (mean+std per feature).
+      - latest_incongruence: the most recent incongruent entry, if any.
+      - summary: counts and aggregates over the window.
+
+    Only entries with stored biomarker fields are included.
+    """
+    from services.voice_biomarkers import compute_user_baseline
+
+    uid = user_id or settings.default_user_id
+    now = datetime.now(timezone.utc)
+    date_from = int((now - timedelta(days=days)).timestamp())
+
+    entries = scroll_entries(user_id=uid, date_from=date_from, limit=200)
+
+    timeline = []
+    for e in entries:
+        payload = e.payload or {}
+        if payload.get("vocal_stress_score") is None:
+            continue
+        timeline.append({
+            "id": e.id,
+            "date": payload.get("date"),
+            "timestamp": payload.get("timestamp"),
+            "text_sentiment": payload.get("sentiment_score"),
+            "vocal_stress_score": payload.get("vocal_stress_score"),
+            "pitch_mean": payload.get("pitch_mean"),
+            "pitch_std": payload.get("pitch_std"),
+            "speech_rate": payload.get("speech_rate"),
+            "pause_ratio": payload.get("pause_ratio"),
+            "energy_mean": payload.get("energy_mean"),
+            "jitter": payload.get("jitter"),
+            "audio_duration": payload.get("audio_duration"),
+            "text_voice_congruence": payload.get("text_voice_congruence"),
+            "voice_incongruent": payload.get("voice_incongruent", False),
+            "transcript": (payload.get("transcript") or "")[:160],
+        })
+
+    timeline.sort(key=lambda p: p.get("timestamp") or 0)
+
+    baseline = compute_user_baseline(uid, days=days)
+
+    incongruent_points = [p for p in timeline if p.get("voice_incongruent")]
+    latest_incongruence = incongruent_points[-1] if incongruent_points else None
+
+    avg_stress = (
+        round(sum(p["vocal_stress_score"] for p in timeline) / len(timeline), 4)
+        if timeline else None
+    )
+    avg_congruence = (
+        round(
+            sum(p["text_voice_congruence"] or 0.0 for p in timeline) / len(timeline),
+            4,
+        )
+        if timeline else None
+    )
+
+    return {
+        "timeline": timeline,
+        "baseline": baseline,
+        "latest_incongruence": latest_incongruence,
+        "summary": {
+            "total_voice_entries": len(timeline),
+            "incongruent_count": len(incongruent_points),
+            "avg_vocal_stress": avg_stress,
+            "avg_congruence": avg_congruence,
+        },
+    }
+
+
 @router.delete("/api/entries")
 def clear_entries(user_id: str = Query(default=None)):
     """Delete all entries for a user. For dev/demo use only."""
     uid = user_id or settings.default_user_id
     count = delete_entries(uid)
     return {"status": "cleared", "deleted": count}
+
+
+@router.get("/api/triggers")
+def get_triggers(
+    user_id: str = Query(default=None),
+    days: int = Query(default=90),
+):
+    """Detect emotional trigger patterns from journal entries.
+
+    Analyzes keyword correlations, time-of-day patterns, and keyword
+    co-occurrences to identify what consistently affects the user's mood.
+    """
+    from services.trigger_detector import detect_triggers
+
+    uid = user_id or settings.default_user_id
+    return detect_triggers(uid, days=days)
 
 
 @router.get("/api/report")

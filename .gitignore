@@ -14,3 +14,6 @@ backend/routers/__pycache__/
 backend/models/__pycache__/
 backend/seed/__pycache__/
 backend/tests/__pycache__/
+backend/capsules/*.webm
+backend/capsules/*.ogg
+backend/capsules/*.mp3

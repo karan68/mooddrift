@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { fetchReport, getCurrentUser, USER_PROFILES } from "../utils/api";
+import DriftTimeline from "./DriftTimeline";
+import ScatterPlot from "./ScatterPlot";
+import VoiceBiomarkers from "./VoiceBiomarkers";
 
 interface ReportData {
   user_id: string;
@@ -64,7 +67,7 @@ export default function TherapistReport() {
 
   if (!report) {
     return (
-      <div className="report-trigger">
+      <div className="report-trigger no-print">
         <h2>Therapist Report</h2>
         <p className="report-desc">
           Generate a summary to share with your therapist or counselor.
@@ -219,6 +222,20 @@ export default function TherapistReport() {
             ))}
           </section>
         )}
+
+        {/* Clinical charts — rendered inside report for clean PDF export */}
+        <section className="report-section">
+          <h2>Clinical Charts</h2>
+          <div style={{ marginTop: 8 }}>
+            <DriftTimeline />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <ScatterPlot />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <VoiceBiomarkers />
+          </div>
+        </section>
 
         <footer className="report-footer">
           <p>

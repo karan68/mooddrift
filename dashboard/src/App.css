@@ -1120,6 +1120,7 @@ body {
   .report { border: none; box-shadow: none; padding: 0; }
   .report-entry { break-inside: avoid; }
   .report-section { break-inside: avoid; }
+  .panel { break-inside: avoid; }
 }
 
 /* ====== Responsive ====== */
